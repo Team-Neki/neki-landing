@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://SITE_URL/sitemap.xml
+Sitemap: https://neki-landing.suitestudy.com/sitemap.xml

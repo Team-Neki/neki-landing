@@ -1,0 +1,69 @@
+# main 에 merge 되면 서빙할 정적 파일만 서버로 rsync 한다.
+# 서버의 nginx 컨테이너가 DEPLOY_PATH 를 볼륨으로 마운트해 서빙하므로 reload 는 필요 없다.
+#
+# 필요한 저장소 secret:
+#   SSH_HOST         서버 외부 주소
+#   SSH_PORT         SSH 포트
+#   SSH_USER         배포 전용 계정 (rrsync 로 DEPLOY_PATH 에만 쓸 수 있게 제한 권장)
+#   SSH_PRIVATE_KEY  배포 전용 키 (ed25519, 패스프레이즈 없음)
+#   SSH_KNOWN_HOSTS  `ssh-keyscan -p <port> <host>` 결과. 호스트 키를 고정해 중간자 공격을 막는다
+#   DEPLOY_PATH      (선택) 업로드 경로. 없으면 "." — rrsync 로 제한한 디렉토리 자체
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # workflow_dispatch 는 아무 브랜치에서나 실행할 수 있어서, 머지 안 된 코드가 배포되지 않게 막는다.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # 기획 문서(*.md)와 원본 소스(assets/)는 올리지 않는다. 서빙할 파일만 public/ 에 모은다.
+      - name: Collect site files
+        run: |
+          mkdir public
+          cp -r index.html app.html robots.txt sitemap.xml llms.txt css js img public/
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          for v in SSH_PRIVATE_KEY SSH_KNOWN_HOSTS; do
+            test -n "${!v}" || { echo "::error::secret $v 가 비어 있다."; exit 1; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # --delete 로 레포에서 지운 파일도 서버에서 지운다. 그래서 DEPLOY_PATH 는 랜딩 전용 디렉토리여야 한다
+      # (AASA·assetlinks 등 다른 파일이 있는 디렉토리를 가리키면 함께 지워진다).
+      # 컨테이너 nginx(uid 101)가 읽을 수 있도록 권한을 고정한다.
+      - name: Deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '.' }}
+        run: |
+          for v in SSH_HOST SSH_PORT SSH_USER DEPLOY_PATH; do
+            test -n "${!v}" || { echo "::error::secret $v 가 비어 있다."; exit 1; }
+          done
+          rsync -rlz --delete --chmod=D755,F644 \
+            -e "ssh -i ~/.ssh/id_deploy -p $SSH_PORT -o StrictHostKeyChecking=yes -o BatchMode=yes" \
+            public/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
