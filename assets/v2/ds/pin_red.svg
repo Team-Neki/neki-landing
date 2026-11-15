@@ -1,0 +1,17 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="59" height="59" viewBox="0 0 59 59" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Union" filter="url(#filter0_d_0_4)">
+<path d="M29.5 1.5C36.0109 1.5 39.2662 1.50009 41.9287 2.25098C48.626 4.13981 53.8602 9.37397 55.749 16.0713C56.4999 18.7337 56.5 21.9893 56.5 28.5C56.5 35.0108 56.4999 38.2663 55.749 40.9287C53.8602 47.626 48.626 52.8602 41.9287 54.749C39.2663 55.4999 36.0108 55.5 29.5 55.5C22.9892 55.5 19.7337 55.4999 17.0713 54.749C10.374 52.8602 5.13983 47.626 3.25098 40.9287C2.50009 38.2663 2.5 35.0108 2.5 28.5C2.5 21.9893 2.50014 18.7337 3.25098 16.0713C5.13981 9.37397 10.374 4.13981 17.0713 2.25098C19.7338 1.50009 22.9891 1.5 29.5 1.5Z" fill="white"/>
+</g>
+<defs>
+<filter id="filter0_d_0_4" x="0" y="0" width="59" height="59" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="1"/>
+<feGaussianBlur stdDeviation="1.25"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.4 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_4"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_4" result="shape"/>
+</filter>
+</defs>
+</svg>
