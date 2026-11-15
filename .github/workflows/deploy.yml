@@ -1,12 +1,17 @@
 # main 에 merge 되면 서빙할 정적 파일만 서버로 rsync 한다.
 # 서버의 nginx 컨테이너가 DEPLOY_PATH 를 볼륨으로 마운트해 서빙하므로 reload 는 필요 없다.
 #
-# 필요한 저장소 secret:
-#   SSH_HOST         서버 외부 주소
-#   SSH_PORT         SSH 포트
+# 서버 SSH 는 외부에 열지 않고 Tailscale 로만 접속한다. runner 가 tag:ci 노드로 tailnet 에 잠깐 붙었다가
+# job 이 끝나면 빠진다(ephemeral).
+#
+# 필요한 secret:
+#   TS_OAUTH_CLIENT_ID  Tailscale OAuth 클라이언트 ID (auth_keys 쓰기 scope, tag:ci)
+#   TS_OAUTH_SECRET     Tailscale OAuth 클라이언트 secret
+#   SSH_HOST         서버의 tailnet IP (`tailscale ip -4`, 100.x.y.z)
+#   SSH_PORT         서버 sshd 가 실제로 듣는 포트 (공유기 포워딩 포트가 아님, 보통 22)
 #   SSH_USER         배포 전용 계정 (rrsync 로 DEPLOY_PATH 에만 쓸 수 있게 제한 권장)
 #   SSH_PRIVATE_KEY  배포 전용 키 (ed25519, 패스프레이즈 없음)
-#   SSH_KNOWN_HOSTS  `ssh-keyscan -p <port> <host>` 결과. 호스트 키를 고정해 중간자 공격을 막는다
+#   SSH_KNOWN_HOSTS  서버 호스트 키. 호스트 이름 자리가 SSH_HOST(tailnet IP, 포트가 22 가 아니면 [IP]:포트)여야 한다
 #   DEPLOY_PATH      (선택) 업로드 경로. 없으면 "." — rrsync 로 제한한 디렉토리 자체
 name: deploy
 
@@ -37,6 +42,14 @@ jobs:
         run: |
           mkdir public
           cp -r index.html app.html robots.txt sitemap.xml llms.txt css js img public/
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ secrets.SSH_HOST }}
 
       - name: Set up SSH
         env:
