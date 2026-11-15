@@ -7,7 +7,7 @@
 #   SSH_USER         배포 전용 계정 (rrsync 로 DEPLOY_PATH 에만 쓸 수 있게 제한 권장)
 #   SSH_PRIVATE_KEY  배포 전용 키 (ed25519, 패스프레이즈 없음)
 #   SSH_KNOWN_HOSTS  `ssh-keyscan -p <port> <host>` 결과. 호스트 키를 고정해 중간자 공격을 막는다
-#   DEPLOY_PATH      업로드 경로. rrsync 로 제한했다면 그 디렉토리 기준 상대경로(보통 ".")
+#   DEPLOY_PATH      (선택) 업로드 경로. 없으면 "." — rrsync 로 제한한 디렉토리 자체
 name: deploy
 
 on:
@@ -59,7 +59,7 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '.' }}
         run: |
           for v in SSH_HOST SSH_PORT SSH_USER DEPLOY_PATH; do
             test -n "${!v}" || { echo "::error::secret $v 가 비어 있다."; exit 1; }
