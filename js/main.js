@@ -13,16 +13,13 @@
     android: 'https://play.google.com/store/apps/details?id=com.neki.android'
   };
 
-  // 포즈 사진: 1~2인은 NEKI 가상 캐스트(F1·F2·M1·M2) 세트, 3·4인은 캐스트 범위 밖이라 Figma AI 세트
+  // 포즈 사진: NEKI 가상 캐스트(F1·F2·M1·M2) 세트. 히어로 촬영과 필름 띠가 쓴다
   var cast = function (name, n) { var out = []; for (var k = 1; k <= n; k++) out.push([1, 2, 3, 4].map(function (i) { return 'img/cast/' + name + '-' + k + '-' + i + '.webp'; })); return out; };
-  var ai = function (name) { return [[1, 2, 3, 4].map(function (i) { return 'img/pose/' + name + '-' + i + '.webp'; })]; };
   var POSES = {
     '1': { label: '1인', sets: cast('solo', 1) },
     '2-friend': { label: '2인 · 친구', sets: cast('friend', 6) },
     '2-some': { label: '2인 · 썸', sets: cast('ssum', 6) },
-    '2-couple': { label: '2인 · 커플', sets: cast('couple', 6) },
-    '3': { label: '3인', sets: ai('trio') },
-    '4': { label: '4인', sets: ai('quad') }
+    '2-couple': { label: '2인 · 커플', sets: cast('couple', 6) }
   };
   var CAST_KEYS = ['1', '2-friend', '2-some', '2-couple'];
   var shuffle = function (a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
@@ -109,8 +106,9 @@
     if (!io) return set;
     var pick = function () {
       if (!wideMQ.matches) return;
-      var mid = innerHeight / 2, best = 0, gap = Infinity;
-      items.forEach(function (s, k) { var r = s.getBoundingClientRect(); var d = Math.abs(r.top + r.height / 2 - mid); if (d < gap) { gap = d; best = k; } });
+      // 윗변이 화면 가운데를 넘은 마지막 단계를 켠다(첫 단계는 스크롤 장면이라 키가 커서, 가운데 기준이면 일찍 넘어간다)
+      var mid = innerHeight / 2, best = 0;
+      items.forEach(function (s, k) { if (s.getBoundingClientRect().top <= mid) best = k; });
       set(best);
     };
     var tickS = false;
@@ -131,41 +129,115 @@
   var typed = $('[data-typed]');
   var phTimers = [];
   var later = function (fn, ms) { phTimers.push(setTimeout(fn, ms)); };
-  // mapMs = 지도를 보여주는 시간. 데스크톱은 스크롤로 폰이 자리 잡을 때까지 지도가 보이므로 짧게(0.3초),
-  // 모바일은 단계가 시간으로 돌아서 1.1초.
+  var WORD = '인생네컷 사당';
+  // 모바일: 단계가 시간으로 돌아서 검색 장면도 타이머로 재생한다(지도 mapMs → 탭 → 타이핑 → 결과 → 첫 결과 탭)
   function searchScene(mapMs) {
-    var word = '인생네컷 사당';
+    var word = WORD;
     var ph = function (name) { flow.dataset.ph = name; };
     typed.textContent = '';
     if (reduce) { typed.textContent = word; return ph('result'); }
     ph('map');
     var m = mapMs;
     later(function () { ph('tapbar'); }, m);
-    later(function () { ph('search'); }, m + 500);
-    for (var k = 1; k <= word.length; k++) (function (k) { later(function () { typed.textContent = word.slice(0, k); }, m + 800 + k * 150); })(k);
-    var t = m + 800 + word.length * 150;
-    later(function () { ph('result'); }, t + 300);
-    later(function () { ph('pick'); }, t + 1200);
+    later(function () { ph('search'); }, m + 700);
+    for (var k = 1; k <= word.length; k++) (function (k) { later(function () { typed.textContent = word.slice(0, k); }, m + 1100 + k * 210); })(k);
+    var t = m + 1100 + word.length * 210;
+    later(function () { ph('result'); }, t + 500);
+    later(function () { ph('pick'); }, t + 1700);
   }
-  // 데스크톱: 폰이 90% 이상 보여 자리를 잡는 스크롤 지점에서 검색을 시작한다. 그 전(폰이 올라오는 동안)은 지도.
-  // 모바일: 폰이 화면에 들어오면 시작.
-  var settled = function () {
-    var r = flow.getBoundingClientRect();
-    if (!wideMQ.matches) return r.top < innerHeight * .75 && r.bottom > innerHeight * .25;
-    return (Math.min(innerHeight, r.bottom) - Math.max(0, r.top)) / r.height >= .9;
-  };
+  // 데스크톱: 검색 장면이 스크롤을 따라간다(타이머 없음). "검색해요" 글이 화면에 고정된 동안의 진행 s(0→1)를
+  // 지도 → 검색창 탭 → 검색 화면 → 한 글자씩 타이핑 → 결과 → 첫 결과 탭으로 나눈다. 멈추면 멈추고, 올리면 되감긴다.
+  var step0 = $('#map [data-steps] li');
+  function searchAt(s) {
+    step0.style.setProperty('--s', s.toFixed(3)); // stage3d.js가 읽어 3D 지도를 반응시킨다
+    var ph = s < .1 ? 'map' : s < .18 ? 'tapbar' : s < .7 ? 'search' : s < .85 ? 'result' : 'pick';
+    var n = s < .26 ? 0 : Math.min(WORD.length, Math.ceil((s - .26) / .38 * WORD.length));
+    if (flow.dataset.ph !== ph) flow.dataset.ph = ph;
+    var w = WORD.slice(0, n); if (typed.textContent !== w) typed.textContent = w;
+  }
+  function searchScroll() {
+    if (!wideMQ.matches || flow.dataset.step !== '0') return;
+    if (reduce) { typed.textContent = WORD; flow.dataset.ph = 'result'; return; }
+    if (!gathered) return searchAt(0);
+    var r = step0.getBoundingClientRect();
+    // s=0: 단계 칸 윗변이 화면 70% 지점, s=1: "골라요"로 넘어가기 100px 전(넘어가는 지점 = 윗변이 50% - 칸 높이)
+    searchAt(clamp01((innerHeight * .7 - r.top) / Math.max(1, r.height + innerHeight * .2 - 100)));
+  }
+  // 찾아가요: 빨간 길도 스크롤로 그린다. 단계가 켜진 지점(윗변이 화면 가운데)부터 칸 높이의 55%를 내리면 도착,
+  // 나머지 45%(+ 섹션 아래 여백)는 도착한 장면에 머문다. stage3d.js가 --r(0→1)을 읽는다
+  var stepLast = $('#map [data-steps] li:last-child');
+  function routeScroll() {
+    if (!wideMQ.matches) return;
+    var r = stepLast.getBoundingClientRect();
+    var v = flow.dataset.step === '2' ? clamp01((innerHeight * .5 - r.top) / (r.height * .55)) : 0;
+    stepLast.style.setProperty('--r', v.toFixed(3));
+  }
+  // 데스크톱 무대 문구: 다 모이기 전엔 소개, 그다음엔 지금 단계. 아래 진행 막대는 검색 장면 진행(--s)만큼 찬다
+  var stageCap = $('.stage-cap'); // 이름 주의: 아래 아카이빙 코드에 같은 함수 범위의 var cap이 있다
+  var caps = stageCap ? $$('[data-cap]', stageCap) : [], dots = stageCap ? $$('[data-dot]', stageCap) : [], bars = stageCap ? $$('[data-bar]', stageCap) : [];
+  function capUpdate() {
+    if (!stageCap) return;
+    var st = gathered ? +flow.dataset.step : -1;
+    caps.forEach(function (el) { el.classList.toggle('is-on', el.dataset.cap === (st < 0 ? 'intro' : String(st))); });
+    stageCap.classList.toggle('is-intro', st < 0);
+    dots.forEach(function (el, k) { el.classList.toggle('is-on', k <= st); });
+    var s = parseFloat(step0.style.getPropertyValue('--s')) || 0;
+    bars[0].style.setProperty('--f', st > 0 ? 1 : st === 0 ? s : 0);
+    bars[1].style.setProperty('--f', st > 1 ? 1 : 0);
+    if (st === 2) routeScroll();
+  }
+  // 모바일: 폰이 화면에 들어오면 시작
+  var settled = function () { var r = flow.getBoundingClientRect(); return r.top < innerHeight * .75 && r.bottom > innerHeight * .25; };
   var mapStep = function (i) {
     flow.dataset.step = i;
     phTimers.forEach(clearTimeout); phTimers = [];
+    if (wideMQ.matches) capUpdate();
     if (i !== 0) { flow.dataset.ph = ''; return; }
-    if (settled()) searchScene(wideMQ.matches ? 300 : 1100); else { typed.textContent = ''; flow.dataset.ph = 'map'; }
+    if (wideMQ.matches) return searchScroll();
+    if (settled()) searchScene(1100); else { typed.textContent = ''; flow.dataset.ph = 'map'; }
   };
+
+  // 지도 도입: 흩어진 브랜드가 폰 지도 위 같은 핀 자리로 모인다. 데스크톱은 스크롤 진행(p)으로,
+  // 모바일은 폰이 보일 때 한 번. 데스크톱에선 다 모여야(gathered) 검색 장면이 시작된다.
+  var gather = $('[data-gather]'), mapSteps = $('#map [data-steps]');
+  var gathered = !gather || reduce;
+  var clamp01 = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+  var easeOut = function (t) { return 1 - Math.pow(1 - t, 3); };
+  var pieces = gather ? $$('[data-d]', gather) : [];
+  function setGather(p) {
+    pieces.forEach(function (el) { el.style.setProperty('--e', easeOut(clamp01((p - el.dataset.d) / .66)).toFixed(3)); });
+    flow.style.setProperty('--g', clamp01((p - .55) / .45).toFixed(3));
+    gather.classList.toggle('is-done', p >= 1);
+    var was = gathered; gathered = p >= 1;
+    if (was !== gathered && wideMQ.matches && flow.dataset.step === '0') mapStep(0);
+  }
+  if (gather && flow && !reduce) {
+    var onGather = function () {
+      if (!wideMQ.matches) return;
+      // 진행도는 (화면엔 안 보이는) 단계 목록 위치로 잰다. stage3d.js와 같은 식
+      var h = innerHeight, st = mapSteps.getBoundingClientRect().top;
+      setGather(clamp01((h * 1.65 - st) / (h * .85)));
+      searchScroll();
+      routeScroll();
+      capUpdate();
+    };
+    var tickG = false;
+    addEventListener('scroll', function () { if (!tickG) { tickG = true; requestAnimationFrame(function () { tickG = false; onGather(); }); } }, { passive: true });
+    if (wideMQ.matches) onGather();
+    else {
+      setGather(0);
+      if (io) new IntersectionObserver(function (es, ob) {
+        if (!es[0].isIntersecting) return;
+        ob.disconnect();
+        var t0 = performance.now();
+        (function step(now) { var p = clamp01((now - t0) / 1000); setGather(p); if (p < 1) requestAnimationFrame(step); })(t0);
+      }, { threshold: .5 }).observe(flow);
+      else setGather(1);
+    }
+  }
+
   if (flow) {
-    stepFlow($('#map'), flow, mapStep, [5100, 2600, 2600]);
-    // 데스크톱: 첫 단계에서 그 지점을 내려가며 넘으면 검색 시작, 올라가며 넘으면 다시 지도
-    if (io) new IntersectionObserver(function (es) {
-      if (wideMQ.matches && flow.dataset.step === '0') mapStep(0);
-    }, { threshold: .9 }).observe(flow);
+    stepFlow($('#map'), flow, mapStep, [6800, 2800, 2800]);
   }
 
   // 헤더 메뉴: 지금 보는 섹션
@@ -346,7 +418,7 @@
     });
   }
 
-  // 9) 아카이빙: Retro식 스크롤 연출(트랙 진행도 p 0 → 1)
+  // 9) 아카이빙: 스크롤 연출(트랙 진행도 p 0 → 1)
   //    A 흩어진 갤러리 → B 네컷만 한 줄(나머지는 사라짐) → C 한 장의 앨범 카드로 겹침 → D 폰이 올라오고 카드가 즐겨찾기 앨범 칸으로 들어감
   var arch = $('[data-arch]');
   var arcEl = $('[data-arc]');
