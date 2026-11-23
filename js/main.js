@@ -350,16 +350,27 @@
     var key = function () { return st.n === '2' && st.r ? '2-' + st.r : st.n; };
     var grid = $('[data-ap-grid]'), count = $('[data-ap-count]'), tapEl = $('.ap-tap', app);
     var nText = $('[data-chip-n-text]'), randomImg = $('[data-ap-random]'), randomBtn = $('[data-random]');
+    var randomLabel = $('[data-random-label]', picker);
+    var relation = $('[data-relation]', picker);
+    var status = $('[data-pose-status]', picker);
     var wait = function (ms) { return new Promise(function (ok) { setTimeout(ok, reduce ? 0 : ms); }); };
     var tap = function (xPt, yPt) { tapEl.style.left = (xPt / 375 * 100) + '%'; tapEl.style.top = (yPt / 812 * 100) + '%'; tapEl.classList.remove('is-on'); void tapEl.offsetWidth; tapEl.classList.add('is-on'); };
     var radio = function (group, btn) { $$('button', group).forEach(function (b) { b.setAttribute('aria-checked', b === btn ? 'true' : 'false'); }); };
+    var paintTimer;
+    function describe() {
+      var names = { friend: '친구', some: '썸', couple: '커플' };
+      return st.n + '명' + (st.r ? ' · ' + names[st.r] : '');
+    }
     function paint() {
+      relation.hidden = st.n !== '2';
+      status.textContent = describe() + ' 포즈를 보고 있어요';
       $('[data-chip-n]', app).classList.toggle('is-on', !!st.n);
       nText.textContent = st.n ? st.n + '인' : '인원수';
       $$('[data-chip-r]', app).forEach(function (c) { c.classList.toggle('is-on', c.dataset.chipR === st.r); });
       var list = FEED[key()];
       grid.classList.add('is-swap');
-      setTimeout(function () {
+      clearTimeout(paintTimer);
+      paintTimer = setTimeout(function () {
         grid.innerHTML = list.slice(0, 4).map(function (k) { return '<figure class="ap-card"><img src="' + CARD(k) + '" alt="" width="324" height="486"></figure>'; }).join('');
         count.textContent = list.length + '개의 포즈';
         grid.classList.remove('is-swap');
@@ -370,7 +381,7 @@
     async function pickN(n) {
       var my = ++turn;
       var stale = function () { return my !== turn; };
-      app.classList.remove('is-random'); randomBtn.textContent = '랜덤 포즈 추천 받기';
+      app.classList.remove('is-random'); randomLabel.textContent = '랜덤 포즈 추천 받기';
       tap(120, 126);                       // 인원수 칩
       await wait(250); if (stale()) return; app.classList.add('is-sheet');
       await wait(450); if (stale()) return;
@@ -378,20 +389,25 @@
       tap(60, 570 + (Number(n) - 1) * 52 + 26);
       await wait(550); if (stale()) return;
       app.classList.remove('is-sheet');
-      st.n = n; if (n !== '2') st.r = ''; paint();
+      paint();
     }
     $$('[data-n]', picker).forEach(function (b) {
       b.addEventListener('click', function () {
+        clearTimeout(paintTimer);
+        grid.classList.remove('is-swap');
         radio(b.parentNode, b);
         var hasRel = b.dataset.n === '2';
         if (!hasRel) radio($('[data-rel]', picker), null);
+        st.n = b.dataset.n; if (!hasRel) st.r = '';
+        relation.hidden = !hasRel;
+        status.textContent = describe() + ' 포즈를 고르고 있어요';
         pickN(b.dataset.n);
       });
     });
     $$('[data-r]', picker).forEach(function (b) {
       b.addEventListener('click', function () {
         radio(b.parentNode, b); radio($('.seg', picker), $('[data-n="2"]', picker));
-        app.classList.remove('is-random'); randomBtn.textContent = '랜덤 포즈 추천 받기';
+        app.classList.remove('is-random'); randomLabel.textContent = '랜덤 포즈 추천 받기';
         var chip = $('[data-chip-r="' + b.dataset.r + '"]', app);
         tap(chip.offsetLeft / app.clientWidth * 375 + chip.offsetWidth / app.clientWidth * 375 / 2 + 20, 126);
         turn++; app.classList.remove('is-sheet');   // 열려 있던 인원 수 바텀시트는 닫는다
@@ -400,19 +416,21 @@
     });
     var last = '';
     randomBtn.addEventListener('click', async function () {
-      turn++; app.classList.remove('is-sheet');
+      var my = ++turn; app.classList.remove('is-sheet');
       var list = FEED[key()];
       var k = list[Math.floor(Math.random() * list.length)];
       if (list.length > 1) while (k === last) k = list[Math.floor(Math.random() * list.length)];
       last = k;
+      randomImg.classList.remove('is-out');
+      status.textContent = describe() + ' 포즈를 추천했어요';
       if (!app.classList.contains('is-random')) {
         tap(188, 714);                     // 랜덤 포즈 추천 버튼
-        await wait(300);
+        await wait(300); if (my !== turn) return;
         randomImg.src = CARD(k); app.classList.add('is-random');
-        randomBtn.textContent = '다른 포즈 보기';
+        randomLabel.textContent = '다른 포즈 보기';
       } else {
         randomImg.classList.add('is-out');
-        await wait(300);
+        await wait(300); if (my !== turn) return;
         randomImg.src = CARD(k); randomImg.classList.remove('is-out');
       }
     });
