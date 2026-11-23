@@ -351,21 +351,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @keyframes tap { 0% { opacity: 0; transform: scale(1.5); } 40% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.9); } }
 
 /* 포즈: 오른쪽 고르기 ↔ 폰 속 앱 포즈 화면. 폰 안 치수는 375pt 디자인 기준(--u = 1pt) */
-.picker { margin-top: 32px; max-width: 400px; }
-.picker__label { font-size: 15px; font-weight: 600; color: var(--gray-700); margin-bottom: 12px; }
-.seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.seg button { min-width: 0; min-height: 88px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px 4px; border: 1px solid var(--primary-50); border-radius: 16px; background: #fff; color: var(--gray-500); font: inherit; font-weight: 700; cursor: pointer; transition: color .2s, background .2s, border-color .2s; }
-.seg__people { height: 22px; width: auto; max-width: 90%; fill: currentColor; }
-.seg button[aria-checked="true"] { background: var(--primary-400); color: var(--gray-900); border-color: var(--primary-400); }
-.picker__relation { margin-top: 24px; }
-.picker__relation[hidden] { display: none; }
-.rel { display: flex; gap: 8px; }
-.rel button { flex: 1; min-height: 44px; padding: 8px 16px; border: 1px solid var(--primary-50); border-radius: 12px; background: #fff; font: inherit; font-weight: 600; color: var(--gray-700); cursor: pointer; transition: color .2s, background .2s, border-color .2s; }
-.rel button[aria-checked="true"] { background: var(--primary-25); border-color: var(--primary-700); color: var(--primary-700); }
-.picker__random { border: 0; cursor: pointer; margin-top: 24px; width: 100%; min-height: 56px; gap: 10px; background: var(--primary-700); color: #fff; }
-.picker__random svg { width: 22px; height: 22px; flex: none; }
-.picker__status { margin-top: 12px; min-height: 24px; text-align: center; font-size: 14px; color: var(--gray-700); }
-@media (hover: hover) { .seg button:hover, .rel button:hover { border-color: var(--primary-700); } .picker__random:hover { background: var(--gray-900); } }
+.picker { margin-top: 28px; }
+.picker__label { font-size: 15px; font-weight: 700; color: var(--gray-700); margin-bottom: 10px; }
+.seg, .rel { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-pill); background: #fff; box-shadow: 0 6px 18px rgb(32 34 39 / .06); width: max-content; max-width: 100%; }
+.seg button, .rel button { min-width: 64px; height: 48px; padding: 0 16px; border: 0; border-radius: var(--radius-pill); background: none; font-size: 17px; font-weight: 700; color: var(--gray-700); transition: background .2s, color .2s; }
+.seg button[aria-checked="true"], .rel button[aria-checked="true"] { background: var(--primary-700); color: #fff; }
+.rel { margin-top: 10px; }
+.rel button { height: 44px; font-size: 16px; }
+.picker__random { margin-top: 20px; }
 
 .appose { container-type: inline-size; overflow: hidden; background: #fff; }
 .ap-feed, .ap-random { --u: calc(100cqw / 375); position: absolute; inset: 0; } /* cqw는 컨테이너(.appose)의 자식에서 계산해야 한다 */

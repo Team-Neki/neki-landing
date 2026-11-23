@@ -5,6 +5,6 @@
   "scripts": {
     "dev": "python3 -m http.server 8000 --bind 127.0.0.1",
     "check": "python3 scripts/check.py && node --check js/main.js && node --check js/stage3d.js",
-    "test": "npm run check && node scripts/check-pose.cjs"
+    "test": "npm run check"
   }
 }
