@@ -1,0 +1,10 @@
+{
+  "name": "neki-landing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 8000 --bind 127.0.0.1",
+    "check": "python3 scripts/check.py && node --check js/main.js && node --check js/stage3d.js",
+    "test": "npm run check"
+  }
+}

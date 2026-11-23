@@ -37,6 +37,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate before deployment
+        run: npm run check
+
       # 기획 문서(*.md)와 원본 소스(assets/)는 올리지 않는다. 서빙할 파일만 public/ 에 모은다.
       - name: Collect site files
         run: |
