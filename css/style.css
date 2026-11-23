@@ -529,3 +529,100 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @media (max-width: 1023px) { .dl-bg img:nth-child(n+4) { display: none; } }
+
+/* 로컬 작업안: 실제 포즈 카드를 선택하고 밀어 넘기는 조작 */
+.picker__hint { max-width: 28em; margin-top: 14px; font-size: 14px; color: var(--gray-700); }
+.rel[hidden] { display: none; }
+button.ap-card { display: block; width: 100%; padding: 0; border: 0; cursor: pointer; transition: transform .25s var(--ease), box-shadow .25s; }
+button.ap-card:focus-visible { outline-offset: -3px; }
+@media (hover: hover) { button.ap-card:hover { transform: translateY(-4px); box-shadow: 0 8px 18px rgb(32 34 39 / .14); } }
+.ap-grid.is-dealing .ap-card { animation: pose-deal .42s var(--ease) both; animation-delay: calc(var(--card-i, 0) * 45ms); }
+@keyframes pose-deal { from { opacity: 0; transform: translateY(22px) scale(.96); } to { opacity: 1; transform: none; } }
+.ap-random__card { touch-action: pan-y; cursor: grab; isolation: isolate; }
+.ap-random__card:active { cursor: grabbing; }
+.ap-random__card img { user-select: none; -webkit-user-drag: none; }
+.ap-random__card.is-dragging img { transition: none; }
+.ap-random__card img.is-entering { animation: pose-arrive .32s var(--ease) both; }
+@keyframes pose-arrive { from { opacity: 0; transform: translateX(var(--pose-enter, 18%)) rotate(3deg); } to { opacity: 1; transform: none; } }
+.ap-back { position: absolute; z-index: 2; top: calc(var(--u) * 49); left: calc(var(--u) * 12); width: calc(var(--u) * 44); height: calc(var(--u) * 44); padding: calc(var(--u) * 10); border: 0; background: #fff; color: var(--gray-900); cursor: pointer; }
+.ap-back svg { width: 100%; height: 100%; }
+.ap-random:not([inert]) { pointer-events: auto; }
+.ap-random[inert] { pointer-events: none; }
+
+/* 지도에서 포즈로: 같은 폰의 위치와 크기를 이어 받는다. */
+.pose-phone-slot { width: min(260px, 66vw); aspect-ratio: 750 / 1624; position: relative; }
+.pose-phone-slot .appose { width: 100%; height: 100%; }
+.appose > .ap-map-handoff { position: absolute; inset: 0; z-index: 10; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; }
+.appose.is-handoff { position: fixed; z-index: 8; margin: 0; pointer-events: none; }
+.appose.is-handoff > .ap-map-handoff { opacity: var(--map-cover, 0); }
+.has-stage .stage3d { opacity: calc(1 - var(--pose-handoff, 0)); }
+@media (min-width: 1024px) { .pose-phone-slot { width: 290px; } }
+@media (prefers-reduced-motion: reduce) { .appose > .ap-map-handoff { display: none; } }
+
+/* 포즈: 폰에서 네 컷이 나와 스크롤을 따라 펼쳐지는 무대 */
+.feature--pose { padding: 0; }
+.pose-story-track { position: relative; height: 380vh; }
+.pose-story-stage { position: sticky; top: 0; height: 100vh; min-height: 580px; overflow: hidden; }
+.pose-story-stage > .feature__inner { height: 100%; }
+.pose-story-stage .feature__visual { min-height: 0; }
+.pose-story-stage .feature__copy { position: relative; z-index: 6; }
+.pose-story-stage .picker { transition: opacity .2s; }
+.pose-story-heading { position: absolute; z-index: 5; top: calc(var(--header-h) + 30px); left: 20px; right: 20px; text-align: center; pointer-events: none; opacity: var(--story-heading, 0); }
+.pose-story-heading .tab { justify-content: center; }
+.pose-story-title { margin-top: 14px; font-size: clamp(26px, 3.6vw, 44px); line-height: 1.25; font-weight: 700; letter-spacing: -.03em; }
+.pose-story-caption { margin-top: 12px; font-size: 17px; color: var(--gray-700); }
+.pose-story-deck { position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: var(--story-deck, 0); }
+.pose-story-cut { position: absolute; left: 0; top: 0; padding: 7px 7px 27px; background: #fff; border-radius: 12px; box-shadow: 0 12px 36px rgb(32 34 39 / .1); will-change: transform, opacity; transform-origin: center; }
+.pose-story-cut img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.pose-story-cut figcaption { position: absolute; bottom: 5px; left: 10px; color: var(--gray-500); font-size: 12px; font-weight: 600; letter-spacing: .05em; }
+.pose-story-stage .appose:not(.is-handoff) { opacity: var(--story-phone, 1); transform: translateX(calc(var(--story-retreat, 0) * -32px)) scale(calc(1 - var(--story-retreat, 0) * .08)); }
+.pose-story-stage .feature__copy { opacity: var(--story-copy, 1); }
+.pose-story-stage.is-presenting .feature__copy { pointer-events: none; }
+.pose-story-stage.is-presenting .picker { visibility: hidden; }
+@media (max-width: 1023px) {
+  .pose-story-stage > .feature__inner { position: relative; display: block; }
+  .pose-story-stage .feature__copy { position: absolute; top: calc(var(--header-h) + 24px); left: 20px; right: 20px; }
+  .pose-story-stage .feature__copy .feature__desc { font-size: 16px; }
+  .pose-story-stage .feature__copy .h2 { font-size: clamp(24px, 5.8vw, 36px); }
+  .pose-story-stage .feature__visual { position: absolute; top: 42%; left: 0; right: 0; }
+  .pose-story-stage .pose-phone-slot { width: min(220px, 52vw); }
+  .pose-story-stage.is-ready .feature__copy { top: auto; bottom: 90px; }
+  .pose-story-stage.is-ready .feature__copy > .tab, .pose-story-stage.is-ready .feature__copy > .h2, .pose-story-stage.is-ready .feature__copy > .feature__desc { display: none; }
+  .pose-story-stage.is-ready .picker { margin-top: 0; }
+  .pose-story-stage.is-ready .picker__label, .pose-story-stage.is-ready .seg { display: none; }
+  .pose-story-stage.is-ready .rel { margin-top: 0; }
+  .pose-story-stage.is-ready .picker__random { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .pose-story-track { height: auto; } .pose-story-stage { position: relative; height: auto; min-height: 900px; } }
+
+.pose-story-stage .seg, .pose-story-stage #pick-n { display: none; }
+.pose-story-stage.is-ready .pose-story-deck { pointer-events: auto; cursor: grab; touch-action: pan-y; }
+.pose-story-stage.is-ready .pose-story-deck:active { cursor: grabbing; }
+.pose-story-deck:focus-visible { outline-offset: -6px; }
+.pose-story-cut img { -webkit-user-drag: none; user-select: none; }
+.pose-story-stage.is-ready .pose-story-deck { clip-path: inset(0 50% 0 0); }
+@media (max-width: 1023px) { .pose-story-stage.is-ready .pose-story-deck { clip-path: inset(0 0 42% 0); } }
+
+@media (max-width: 1023px) {
+  .pose-story-stage.is-ready .pose-story-heading { opacity: 1; top: calc(var(--header-h) + 8px); }
+  .pose-story-stage.is-ready .pose-story-heading .tab, .pose-story-stage.is-ready .pose-story-caption { display: none; }
+}
+
+/* 네 컷의 자리는 유지하고 관계에 맞는 세트가 부드럽게 겹쳐 바뀐다. */
+.pose-story-cut .pose-relation-photo { position: absolute; inset: 7px 7px 27px; width: calc(100% - 14px); height: calc(100% - 34px); pointer-events: none; opacity: var(--relation-scene, 1); }
+.pose-story-cut .pose-relation-photo--couple { opacity: calc(var(--relation-scene, 1) * var(--relation-couple, 0)); }
+.pose-story-cut .pose-relation-photo--some { opacity: calc(var(--relation-scene, 1) * var(--relation-some, 0)); }
+.pose-story-relations { display: flex; align-items: center; justify-content: center; gap: 24px; margin-top: 20px; opacity: var(--relation-labels, 0); font-size: 17px; font-weight: 600; }
+.pose-story-relations span { position: relative; padding-bottom: 8px; color: var(--gray-500); transition: color .2s; }
+.pose-story-relations span::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 3px; background: var(--primary-400); transform: scaleX(0); transition: transform .2s; }
+.pose-story-relations .is-on { color: var(--primary-700); }
+.pose-story-relations .is-on::after { transform: scaleX(1); }
+@media (max-width: 1023px) { .pose-story-relations { margin-top: 12px; font-size: 15px; } }
+
+/* 스크롤 무대 문구는 일반 reveal과 분리해 표시 시점을 관리한다. */
+.pose-story-title { min-height: 1.25em; }
+.pose-story-caption { min-height: 1.6em; }
+@media (max-width: 1023px) { .pose-story-title { min-height: 2.5em; } }
+
+/* 장면 정렬 중에는 CSS smooth와 JS 보간이 중복되지 않게 한다. */
+html.is-scene-snapping { scroll-behavior: auto !important; }

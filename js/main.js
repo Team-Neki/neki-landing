@@ -332,6 +332,7 @@
 
   // 8) 포즈: 오른쪽에서 고르면 폰 속 앱 화면이 반응한다
   //    인원 → 인원 수 바텀시트에서 체크 → 칩·목록 갱신 / 관계 → 2인 자동 선택(개발 전달 노트) / 랜덤 → 랜덤포즈 화면
+  var syncPoseStory = null, advancePoseStory = null, setPoseStoryRelation = null;
   var picker = $('[data-picker]');
   var app = $('[data-appose]');
   if (picker && app) {
@@ -348,74 +349,307 @@
     };
     var st = { n: '2', r: 'friend' };
     var key = function () { return st.n === '2' && st.r ? '2-' + st.r : st.n; };
-    var grid = $('[data-ap-grid]'), count = $('[data-ap-count]'), tapEl = $('.ap-tap', app);
+    var grid = $('[data-ap-grid]'), count = $('[data-ap-count]');
     var nText = $('[data-chip-n-text]'), randomImg = $('[data-ap-random]'), randomBtn = $('[data-random]');
-    var wait = function (ms) { return new Promise(function (ok) { setTimeout(ok, reduce ? 0 : ms); }); };
-    var tap = function (xPt, yPt) { tapEl.style.left = (xPt / 375 * 100) + '%'; tapEl.style.top = (yPt / 812 * 100) + '%'; tapEl.classList.remove('is-on'); void tapEl.offsetWidth; tapEl.classList.add('is-on'); };
-    var radio = function (group, btn) { $$('button', group).forEach(function (b) { b.setAttribute('aria-checked', b === btn ? 'true' : 'false'); }); };
+    var swipe = $('[data-pose-swipe]'), back = $('[data-pose-back]');
+    var feedView = $('.ap-feed', app), randomView = $('.ap-random', app);
+    var hint = $('[data-pose-hint]'), relations = $('[data-rel]', picker);
+    var last = '', change = 0, drag = null, returnFocus = null;
+    var names = { friend: '친구', some: '썸', couple: '커플' };
+    var describe = function () { return st.n + '명' + (st.r ? ' · ' + names[st.r] : ''); };
+    var radio = function (group, btn) { $$('button', group).forEach(function (b) { b.setAttribute('aria-checked', String(b === btn)); }); };
+    function resetDrag() {
+      drag = null; swipe.classList.remove('is-dragging');
+      randomImg.style.removeProperty('transform'); randomImg.style.removeProperty('opacity');
+    }
+    function listView(focus) {
+      change++; resetDrag();
+      app.classList.remove('is-random');
+      feedView.inert = false; randomView.inert = true;
+      randomBtn.textContent = '랜덤 포즈 추천 받기';
+      hint.textContent = '폰 안의 포즈를 눌러 직접 골라보세요';
+      if (focus && returnFocus && returnFocus.isConnected) returnFocus.focus();
+    }
     function paint() {
-      $('[data-chip-n]', app).classList.toggle('is-on', !!st.n);
-      nText.textContent = st.n ? st.n + '인' : '인원수';
+      listView(false);
+      relations.hidden = st.n !== '2';
+      $('[data-chip-n]', app).classList.add('is-on');
+      nText.textContent = st.n + '인';
       $$('[data-chip-r]', app).forEach(function (c) { c.classList.toggle('is-on', c.dataset.chipR === st.r); });
       var list = FEED[key()];
-      grid.classList.add('is-swap');
-      setTimeout(function () {
-        grid.innerHTML = list.slice(0, 4).map(function (k) { return '<figure class="ap-card"><img src="' + CARD(k) + '" alt="" width="324" height="486"></figure>'; }).join('');
-        count.textContent = list.length + '개의 포즈';
-        grid.classList.remove('is-swap');
-      }, reduce ? 0 : 200);
+      grid.classList.remove('is-dealing');
+      grid.innerHTML = list.slice(0, 4).map(function (k, i) {
+        return '<button class="ap-card" type="button" style="--card-i:' + i + '" data-pose-card="' + k + '" aria-label="' + describe() + ' 포즈 ' + (i + 1) + ' 크게 보기"><img src="' + CARD(k) + '" alt="" width="324" height="486"></button>';
+      }).join('');
+      void grid.offsetWidth;
+      grid.classList.add('is-dealing');
+      count.textContent = list.length + '개의 포즈';
+      hint.textContent = describe() + ' 포즈예요. 다른 세트도 골라보세요';
+      if (syncPoseStory) syncPoseStory((st.r === 'some' ? 'ssum' : st.r || 'friend') + '-1');
     }
-    // 가장 마지막으로 누른 것만 반영한다(바텀시트가 열려 있는 동안 다른 걸 눌러도 꼬이지 않게)
-    var turn = 0;
-    async function pickN(n) {
-      var my = ++turn;
-      var stale = function () { return my !== turn; };
-      app.classList.remove('is-random'); randomBtn.textContent = '랜덤 포즈 추천 받기';
-      tap(120, 126);                       // 인원수 칩
-      await wait(250); if (stale()) return; app.classList.add('is-sheet');
-      await wait(450); if (stale()) return;
-      $$('.ap-sheet li', app).forEach(function (li) { li.classList.toggle('is-on', li.dataset.sn === n); });
-      tap(60, 570 + (Number(n) - 1) * 52 + 26);
-      await wait(550); if (stale()) return;
-      app.classList.remove('is-sheet');
-      st.n = n; if (n !== '2') st.r = ''; paint();
+    async function showCard(k, direction, source) {
+      var mine = ++change;
+      resetDrag();
+      // Load before moving the current photo away; rapid choices only show the latest result.
+      var next = new Image(); next.src = CARD(k);
+      try { await next.decode(); } catch (e) {
+        if (mine === change) hint.textContent = '사진을 불러오지 못했어요. 다시 골라주세요';
+        return;
+      }
+      if (mine !== change) return;
+      var wasOpen = app.classList.contains('is-random');
+      if (wasOpen && !reduce) {
+        randomImg.style.transform = 'translateX(' + (direction < 0 ? '110%' : '-110%') + ') rotate(' + (direction < 0 ? '8deg' : '-8deg') + ')';
+        randomImg.style.opacity = '0';
+        await new Promise(function (done) { setTimeout(done, 180); });
+        if (mine !== change) return;
+      }
+      if (!wasOpen) returnFocus = source || randomBtn;
+      last = k; randomImg.src = CARD(k);
+      if (syncPoseStory) syncPoseStory(k);
+      randomImg.alt = describe() + ' 추천 포즈 ' + (FEED[key()].indexOf(k) + 1);
+      randomImg.classList.remove('is-entering');
+      randomImg.style.removeProperty('transform'); randomImg.style.removeProperty('opacity');
+      randomImg.style.setProperty('--pose-enter', direction < 0 ? '-25%' : '25%');
+      void randomImg.offsetWidth; randomImg.classList.add('is-entering');
+      feedView.inert = true; randomView.inert = false;
+      app.classList.add('is-random');
+      randomBtn.textContent = '다른 포즈 보기';
+      hint.textContent = describe() + ' · ' + (FEED[key()].indexOf(k) + 1) + '/' + FEED[key()].length + ' · 사진을 좌우로 밀어보세요';
+      if (!wasOpen && source && source.closest('.ap-feed')) swipe.focus({ preventScroll: true });
+    }
+    function advance(direction, random) {
+      var list = FEED[key()], index = list.indexOf(last), next;
+      if (random) {
+        var candidates = list.filter(function (k) { return k !== last; });
+        next = candidates[Math.floor(Math.random() * candidates.length)] || list[0];
+      } else next = list[(index + direction + list.length) % list.length];
+      return showCard(next, direction, randomBtn);
     }
     $$('[data-n]', picker).forEach(function (b) {
       b.addEventListener('click', function () {
-        radio(b.parentNode, b);
-        var hasRel = b.dataset.n === '2';
-        if (!hasRel) radio($('[data-rel]', picker), null);
-        pickN(b.dataset.n);
+        st.n = b.dataset.n; if (st.n !== '2') st.r = '';
+        radio(b.parentNode, b); radio(relations, $('[data-r="' + st.r + '"]', picker));
+        paint();
       });
     });
     $$('[data-r]', picker).forEach(function (b) {
       b.addEventListener('click', function () {
-        radio(b.parentNode, b); radio($('.seg', picker), $('[data-n="2"]', picker));
-        app.classList.remove('is-random'); randomBtn.textContent = '랜덤 포즈 추천 받기';
-        var chip = $('[data-chip-r="' + b.dataset.r + '"]', app);
-        tap(chip.offsetLeft / app.clientWidth * 375 + chip.offsetWidth / app.clientWidth * 375 / 2 + 20, 126);
-        turn++; app.classList.remove('is-sheet');   // 열려 있던 인원 수 바텀시트는 닫는다
-        st.n = '2'; st.r = b.dataset.r; paint();   // 관계를 누르면 2인이 자동으로 선택된다
+        st.n = '2'; st.r = b.dataset.r;
+        radio(b.parentNode, b); radio($('.seg', picker), $('[data-n="2"]', picker)); paint();
       });
     });
-    var last = '';
-    randomBtn.addEventListener('click', async function () {
-      turn++; app.classList.remove('is-sheet');
-      var list = FEED[key()];
-      var k = list[Math.floor(Math.random() * list.length)];
-      if (list.length > 1) while (k === last) k = list[Math.floor(Math.random() * list.length)];
-      last = k;
-      if (!app.classList.contains('is-random')) {
-        tap(188, 714);                     // 랜덤 포즈 추천 버튼
-        await wait(300);
-        randomImg.src = CARD(k); app.classList.add('is-random');
-        randomBtn.textContent = '다른 포즈 보기';
-      } else {
-        randomImg.classList.add('is-out');
-        await wait(300);
-        randomImg.src = CARD(k); randomImg.classList.remove('is-out');
+    grid.addEventListener('click', function (e) {
+      var card = e.target.closest('[data-pose-card]');
+      if (card && grid.contains(card)) showCard(card.dataset.poseCard, 1, card);
+    });
+    randomBtn.addEventListener('click', function () { advance(1, true); });
+    back.addEventListener('click', function () { listView(true); });
+    swipe.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); advance(e.key === 'ArrowLeft' ? -1 : 1, false); }
+    });
+    randomView.addEventListener('keydown', function (e) { if (e.key === 'Escape') listView(true); });
+    swipe.addEventListener('pointerdown', function (e) {
+      if (!e.isPrimary || e.button !== 0) return;
+      change++; resetDrag();
+      randomImg.classList.remove('is-entering');
+      drag = { x: e.clientX, y: e.clientY, dx: 0, id: e.pointerId };
+      swipe.setPointerCapture(e.pointerId);
+    });
+    swipe.addEventListener('pointermove', function (e) {
+      if (!drag || drag.id !== e.pointerId) return;
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) { resetDrag(); return; }
+      drag.dx = dx;
+      swipe.classList.add('is-dragging');
+      if (!reduce) {
+        randomImg.style.transform = 'translateX(' + dx + 'px) rotate(' + Math.max(-12, Math.min(12, dx / 18)) + 'deg)';
+        randomImg.style.opacity = String(Math.max(.35, 1 - Math.abs(dx) / Math.max(1, swipe.clientWidth)));
       }
     });
+    swipe.addEventListener('pointerup', function (e) {
+      if (!drag || drag.id !== e.pointerId) return;
+      var dx = drag.dx; resetDrag();
+      if (Math.abs(dx) > Math.max(32, swipe.clientWidth * .18)) advance(dx < 0 ? 1 : -1, false);
+    });
+    swipe.addEventListener('pointercancel', resetDrag);
+    swipe.addEventListener('lostpointercapture', resetDrag);
+    randomView.inert = true;
+    advancePoseStory = function (direction) { return advance(direction, false); };
+    setPoseStoryRelation = function (relationship) {
+      st.n = '2'; st.r = relationship;
+      radio(relations, $('[data-r="' + relationship + '"]', picker));
+      radio($('.seg', picker), $('[data-n="2"]', picker));
+      hint.textContent = '2명 · ' + names[relationship] + ' 포즈예요. 다른 세트도 골라보세요';
+    };
+  }
+
+  // Desktop handoff: the existing pose phone takes over the map phone's screen position.
+  // The slot keeps document layout stable; no duplicated interactive phone is created.
+  var poseSlot = $('[data-pose-slot]');
+  var mapVisual = $('[data-stage="map"]');
+  if (poseSlot && app && flow && mapVisual) {
+    var handoffPending = false, handoffActive = false;
+    function endHandoff() {
+      if (!handoffActive) return;
+      handoffActive = false;
+      app.classList.remove('is-handoff');
+      ['left', 'top', 'width', 'height', '--map-cover'].forEach(function (property) { app.style.removeProperty(property); });
+      flow.style.removeProperty('opacity');
+      root.style.removeProperty('--pose-handoff');
+    }
+    function handoffFrame() {
+      handoffPending = false;
+      if (reduce || !wideMQ.matches) return endHandoff();
+      var source = flow.getBoundingClientRect(), target = poseSlot.getBoundingClientRect();
+      var visualStyle = getComputedStyle(mapVisual);
+      var padding = parseFloat(visualStyle.paddingTop) || 0;
+      var anchor = (parseFloat(visualStyle.top) || 0) + padding + (mapVisual.clientHeight - padding - source.height) / 2;
+      var distance = target.top - source.top;
+      if (source.top >= anchor || target.top <= anchor || distance <= 0 || target.top > innerHeight * 3) return endHandoff();
+      var progress = Math.max(0, Math.min(1, (anchor - source.top) / distance));
+      var eased = progress * progress * (3 - 2 * progress);
+      handoffActive = true;
+      app.classList.add('is-handoff');
+      app.style.left = (source.left + (target.left - source.left) * eased) + 'px';
+      app.style.top = anchor + 'px';
+      app.style.width = (source.width + (target.width - source.width) * eased) + 'px';
+      app.style.height = (source.height + (target.height - source.height) * eased) + 'px';
+      app.style.setProperty('--map-cover', String(1 - Math.max(0, Math.min(1, (progress - .18) / .5))));
+      root.style.setProperty('--pose-handoff', String(Math.min(1, progress * 3)));
+      flow.style.opacity = '0';
+    }
+    function scheduleHandoff() {
+      if (!handoffPending) { handoffPending = true; requestAnimationFrame(handoffFrame); }
+    }
+    addEventListener('scroll', scheduleHandoff, { passive: true });
+    addEventListener('resize', scheduleHandoff);
+    wideMQ.addEventListener('change', scheduleHandoff);
+    handoffFrame();
+  }
+
+  // Pose story: expand the first 2-person set, spread four cuts, then invite a choice.
+  var poseStory = $('[data-pose-story]');
+  if (poseStory && app && poseSlot) {
+    var storyStage = $('.pose-story-stage', poseStory);
+    var storyDeck = $('[data-pose-deck]', poseStory);
+    var storyCuts = $$('[data-pose-cut]', storyDeck);
+    var storyTitle = $('[data-pose-title]', poseStory), storyCaption = $('[data-pose-caption]', poseStory);
+    var storyCopy = $('.feature__copy', poseStory);
+    var storyPending = false, storyReady = false, storyPhotoTurn = 0, storyTouch = null, storyFrameKey = '';
+    var storyManual = false, storyRelationship = '';
+    var storyRelationLabels = $$('[data-story-relation]', poseStory);
+    var clip = function (n) { return Math.max(0, Math.min(1, n)); };
+    var smooth = function (a, b, p) { var t = clip((p - a) / (b - a)); return t * t * (3 - 2 * t); };
+    var blend = function (a, b, t) { return a + (b - a) * t; };
+    syncPoseStory = async function (set) {
+      if (!/^(friend|ssum|couple)-[1-6]$/.test(set)) return;
+      var mine = ++storyPhotoTurn;
+      var paths = [1, 2, 3, 4].map(function (n) { return 'img/cast/' + set + '-' + n + '.webp'; });
+      try {
+        await Promise.all(paths.map(function (path) { var photo = new Image(); photo.src = path; return photo.decode(); }));
+      } catch (e) { return; }
+      if (mine !== storyPhotoTurn) return;
+      storyCuts.forEach(function (cut, i) { $('img', cut).src = paths[i]; });
+      if (storyReady) { storyManual = true; storyStage.style.setProperty('--relation-scene', '0'); }
+    };
+    function storyFrame() {
+      storyPending = false;
+      var bounds = poseStory.getBoundingClientRect();
+      var W = storyStage.clientWidth, H = storyStage.clientHeight;
+      var p = reduce ? 1 : clip(-bounds.top / Math.max(1, poseStory.offsetHeight - H));
+      var frameKey = p.toFixed(5) + '|' + W + '|' + H;
+      if (frameKey === storyFrameKey) return;
+      storyFrameKey = frameKey;
+      var expand = smooth(.04, .22, p), spread = smooth(.23, .39, p), finish = smooth(.80, .96, p);
+      var relationship = p < .54 ? 'friend' : p < .71 ? 'couple' : 'some';
+      if (reduce) relationship = 'friend';
+      if (p < .94) storyManual = false;
+      if (!storyManual && relationship !== storyRelationship) {
+        storyRelationship = relationship;
+        if (setPoseStoryRelation) setPoseStoryRelation(relationship);
+      }
+      storyStage.style.setProperty('--relation-scene', storyManual || reduce ? '0' : '1');
+      storyStage.style.setProperty('--relation-couple', smooth(.50, .58, p).toFixed(3));
+      storyStage.style.setProperty('--relation-some', smooth(.67, .75, p).toFixed(3));
+      storyStage.style.setProperty('--relation-labels', (smooth(.36, .43, p) * (1 - smooth(.84, .94, p))).toFixed(3));
+      storyRelationLabels.forEach(function (label) { label.classList.toggle('is-on', label.dataset.storyRelation === relationship); });
+      var heading = smooth(.10, .18, p) * (1 - smooth(.80, .88, p));
+      var relationTitles = { friend: '친구랑은, 장난스럽게', couple: '커플이라면, 조금 더 다정하게', some: '썸이라면, 조금씩 가까워지게' };
+      var relationCaptions = { friend: '편한 사이에 어울리는 네 컷', couple: '둘만의 분위기를 담는 네 컷', some: '아직은 설레는 우리 사이의 네 컷' };
+      storyTitle.textContent = p > .9 ? '우리 사이에 맞는 포즈로' : p < .4 ? '둘이 찍을 포즈, 이렇게 이어져요' : relationTitles[relationship];
+      storyCaption.textContent = p < .4 ? '네 컷이 하나의 세트로, 고민할 필요 없이' : relationCaptions[relationship];
+      var slot = poseSlot.getBoundingClientRect();
+      var stageBounds = storyStage.getBoundingClientRect();
+      var unit = Math.max(1, slot.width - 20) / 375;
+      var fromW = 75 * unit, fromH = 106 * unit;
+      var gridW = Math.min(W * .31, 170, H * .20), gridH = gridW * 4 / 3 + 27;
+      var headingBox = $('.pose-story-heading', poseStory).getBoundingClientRect();
+      var headingBottom = headingBox.bottom - storyStage.getBoundingClientRect().top;
+      var baseY = Math.max(headingBottom + 28, H * .37);
+      var rowW = Math.max(40, Math.min((W - 48) / 4.35, 208, (H - baseY - 48 - 27) * .75)), rowH = rowW * 4 / 3 + 27;
+      var gap = W < 768 ? 8 : 20;
+      var rowTotal = rowW * 4 + gap * 3;
+      var finalW = Math.min(W < 1024 ? (W - 64) / 2 : W * .16, 184, H * (W < 1024 ? (H < 780 ? .115 : .13) : .20));
+      var finalH = finalW * 4 / 3 + 27;
+      var finalCenter = W < 1024 ? W / 2 : slot.left - stageBounds.left + slot.width / 2;
+      var finalTop = W < 1024 ? (H < 780 ? 130 : 170) : (H - (finalH * 2 + 12)) / 2;
+      storyCuts.forEach(function (cut, i) {
+        var col = i % 2, row = Math.floor(i / 2);
+        var sx = slot.left - stageBounds.left + 10 + 25 * unit + col * (fromW + 4 * unit);
+        var sy = slot.top - stageBounds.top + 10 + 199 * unit + row * (fromH + 4 * unit);
+        var gx = W / 2 - gridW - 6 + col * (gridW + 12);
+        var gy = Math.max(headingBottom + 24, (H - gridH * 2 - 12) / 2 + 45) + row * (gridH + 12);
+        var rx = (W - rowTotal) / 2 + i * (rowW + gap);
+        var fx = finalCenter - finalW - 6 + col * (finalW + 12);
+        var fy = finalTop + row * (finalH + 12);
+        var x = blend(blend(sx, gx, expand), rx, spread);
+        var y = blend(blend(sy, gy, expand), baseY, spread);
+        var width = blend(blend(fromW, gridW, expand), rowW, spread);
+        var height = blend(blend(fromH, gridH, expand), rowH, spread);
+        x = blend(x, fx, finish); y = blend(y, fy, finish);
+        width = blend(width, finalW, finish); height = blend(height, finalH, finish);
+        cut.style.width = width + 'px'; cut.style.height = height + 'px';
+        cut.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px)';
+        cut.style.opacity = '1';
+        cut.style.zIndex = '1';
+      });
+      storyStage.style.setProperty('--story-heading', heading.toFixed(3));
+      storyStage.style.setProperty('--story-deck', smooth(.04, .10, p).toFixed(3));
+      storyStage.style.setProperty('--story-phone', (1 - smooth(.08, .26, p)).toFixed(3));
+      storyStage.style.setProperty('--story-retreat', expand.toFixed(3));
+      storyStage.style.setProperty('--story-copy', (1 - smooth(.01, .08, p) + smooth(.90, .98, p)).toFixed(3));
+      storyReady = p >= .94 || reduce;
+      storyStage.classList.toggle('is-presenting', !storyReady);
+      storyStage.classList.toggle('is-ready', storyReady);
+      picker.inert = !storyReady;
+      // Keep the semantic heading readable; only gate the interactive picker.
+      storyCopy.inert = false;
+      app.inert = p > .06 || reduce;
+      storyDeck.tabIndex = storyReady ? 0 : -1;
+      storyDeck.setAttribute('aria-hidden', String(p < .08));
+    }
+    function scheduleStory() {
+      if (!storyPending) { storyPending = true; requestAnimationFrame(storyFrame); }
+    }
+    storyDeck.addEventListener('keydown', function (e) {
+      if (!storyReady || !advancePoseStory) return;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); advancePoseStory(e.key === 'ArrowLeft' ? -1 : 1); }
+    });
+    storyDeck.addEventListener('pointerdown', function (e) {
+      if (!storyReady || !e.isPrimary || e.button !== 0) return;
+      storyTouch = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      storyDeck.setPointerCapture(e.pointerId);
+    });
+    storyDeck.addEventListener('pointerup', function (e) {
+      if (!storyTouch || storyTouch.id !== e.pointerId) return;
+      var dx = e.clientX - storyTouch.x, dy = e.clientY - storyTouch.y; storyTouch = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && advancePoseStory) advancePoseStory(dx < 0 ? 1 : -1);
+    });
+    storyDeck.addEventListener('pointercancel', function () { storyTouch = null; });
+    addEventListener('scroll', scheduleStory, { passive: true });
+    addEventListener('resize', scheduleStory);
+    storyFrame();
   }
 
   // 9) 아카이빙: 스크롤 연출(트랙 진행도 p 0 → 1)
